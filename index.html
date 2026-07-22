@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>Vista Cenital de Planta - WMS v4.0</title>
+    <!-- Librería SheetJS para lectura/escritura de archivos Excel (.xlsx / .xls / .csv) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        html, body {
+            min-height: 100%;
+            width: 100%;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: #0d1117;
+            color: #e6edf3;
+            margin: 0;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+            -webkit-text-size-adjust: 100%;
+            padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+            padding-left: calc(env(safe-area-inset-left, 0px) + 10px);
+            padding-right: calc(env(safe-area-inset-right, 0px) + 10px);
+        }
+
+        button, input, select, textarea {
+            font-family: inherit;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+
+        .mapa-nave, .hud-panel, .galpon-container {
+            -webkit-overflow-scrolling: touch;
+        }
+
+        /* HEADER & KPIS GLOBALES */
+        .header-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #161b22;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        h1 { margin: 0; font-size: 18px; color: #ffffff; display: flex; align-items: center; gap: 8px; }
+        .subtitle { color: #8b949e; font-size: 11px; margin-top: 2px; }
+
+        .kpi-bar {
+            display: flex;
+            gap: 10px;
+            background: #0d1117;
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid #21262d;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .kpi-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 0 8px;
+            border-right: 1px solid #30363d;
+        }
+        .kpi-item:last-child { border-right: none; }
+        .kpi-val { font-size: 14px; font-weight: bold; color: #58a6ff; }
+        .kpi-lbl { font-size: 9px; color: #8b949e; text-transform: uppercase; margin-top: 2px; }
+
+        .search-box { display: flex; gap: 6px; width: 100%; max-width: 360px; }
+        .search-box input {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            color: #ffffff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+            flex: 1;
+        }
+        .search-box input:focus { border-color: #58a6ff; }
+
+        /* BOTONES DE ACCION */
+        .btn {
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            justify-content: center;
+        }
+        .btn-primary { background-color: #238636; color: white; }
+        .btn-primary:hover { background-color: #2ea043; }
+        .btn-blue { background-color: #1f6beb; color: white; }
+        .btn-blue:hover { background-color: #388bfd; }
+        .btn-purple { background-color: #8957e5; color: white; }
+        .btn-purple:hover { background-color: #a371f7; }
+        .btn-warning { background-color: #d97706; color: white; }
+        .btn-warning:hover { background-color: #f59e0b; }
+        .btn-danger { background-color: #da3633; color: white; }
+        .btn-danger:hover { background-color: #f85149; }
+        .btn-secondary { background-color: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+        .btn-secondary:hover { background-color: #30363d; }
+
+        /* CONTROLES Y HERRAMIENTAS */
+        .controls-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .view-selectors { display: flex; gap: 5px; flex-wrap: wrap; }
+        .btn-view {
+            background-color: #161b22;
+            color: #8b949e;
+            border: 1px solid #30363d;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 11px;
+        }
+        .btn-view.active {
+            background-color: #1f6beb22;
+            color: #58a6ff;
+            border-color: #58a6ff;
+        }
+
+        /* BANNER DE MODO REUBICACION */
+        #reallocation-banner {
+            background: #d97706;
+            color: #ffffff;
+            padding: 10px 15px;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: bold;
+            box-shadow: 0 4px 12px rgba(217, 119, 6, 0.3);
+        }
+
+        /* LAYOUT PRINCIPAL RESPONSIVE */
+        .main-layout { display: flex; gap: 12px; flex: 1; position: relative; }
+
+        .mapa-nave {
+            flex: 3;
+            background-color: #0d1117;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            padding: 12px;
+            overflow-x: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .galpon-container {
+            background-color: #161b22;
+            border: 1px dashed #30363d;
+            border-radius: 8px;
+            padding: 10px;
+            min-width: 680px;
+        }
+        .galpon-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #58a6ff;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* GRID LAYOUT DE 16 COLUMNAS */
+        .grid-layout { display: grid; grid-template-columns: repeat(16, minmax(38px, 1fr)); gap: 3px; }
+
+        .celda-piso {
+            aspect-ratio: 1.05;
+            background-color: #21262d;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            position: relative;
+            border: 1px solid #30363d;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 2px;
+            font-size: 8px;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .celda-piso.pasillo {
+            background-color: #141923;
+            background-image: repeating-linear-gradient(45deg, #11151d, #11151d 5px, #181f2b 5px, #181f2b 10px);
+            border-color: #21262d;
+        }
+
+        .celda-piso.linea-sep-left { border-left: 2px dashed #ff8c00 !important; }
+        .celda-piso.linea-sep-pasillo-p { border-bottom: 2px dashed #ff9800 !important; }
+
+        .celda-piso:hover { transform: scale(1.08); z-index: 10; box-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        .celda-piso.seleccionada { border: 2px solid #00ffff !important; box-shadow: 0 0 12px #00e5ff !important; z-index: 11; }
+        .celda-piso.destino-reubicacion { border: 2px dashed #f59e0b !important; animation: pulse 1.2s infinite; }
+
+        /* RESALTADO DE BUSQUEDA MULTIPLE */
+        .celda-piso.resaltado-busqueda {
+            border: 2px solid #ffeb3b !important;
+            box-shadow: 0 0 12px #ffeb3b, inset 0 0 6px #ffeb3b !important;
+            animation: pulse-search 0.9s infinite alternate;
+            z-index: 15;
+        }
+
+        @keyframes pulse-search {
+            0% { transform: scale(1.02); }
+            100% { transform: scale(1.12); }
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 4px #f59e0b; }
+            50% { box-shadow: 0 0 14px #f59e0b; }
+            100% { box-shadow: 0 0 4px #f59e0b; }
+        }
+
+        .celda-infra { background-color: #30363d; cursor: not-allowed; border: 1px solid #484f58; color: #8b949e; display:flex; align-items:center; justify-content:center; text-align:center; font-weight:bold; font-size:7px; }
+        .celda-infra-oficinas { background-color: #4a5568 !important; color: #ffffff !important; }
+        .celda-infra-banos { background-color: #0984e3 !important; color: #ffffff !important; }
+        .celda-infra-trafo { background-color: #d97706 !important; color: #ffffff !important; }
+
+        .celda-tag { font-size: 7.5px; color: #8b949e; font-weight: 600; text-align: center; }
+        .celda-badge { font-size: 7px; font-weight: bold; border-radius: 2px; padding: 1px; text-align: center; color: #fff; text-shadow: 0 1px 2px #000; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; display: flex; align-items: center; justify-content: center; gap: 2px; }
+        .celda-bar { height: 3px; background: rgba(255,255,255,0.2); width: 100%; border-radius: 2px; overflow: hidden; margin-top: auto; }
+        .celda-fill { height: 100%; background: #2ea043; transition: width 0.3s; }
+
+        /* PANEL HUD CONSOLA LATERAL */
+        .hud-panel {
+            flex: 1;
+            min-width: 320px;
+            max-width: 380px;
+            background-color: #161b22;
+            border-radius: 8px;
+            border: 1px solid #30363d;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: all 0.3s ease;
+            overflow-y: auto;
+        }
+
+        .hud-panel.collapsed { display: none; }
+
+        .hud-title { font-size: 14px; font-weight: bold; border-bottom: 1px solid #30363d; padding-bottom: 8px; margin-bottom: 10px; color: #ffffff; display: flex; justify-content: space-between; align-items: center; }
+        .hud-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; }
+        .hud-label { color: #8b949e; }
+        .hud-value { font-weight: bold; color: #e6edf3; }
+
+        .legend-box {
+            background: #0d1117;
+            border: 1px solid #21262d;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+            color: #c9d1d9;
+        }
+        .legend-box .legend-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #e6edf3;
+        }
+        .legend-box .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            margin-bottom: 6px;
+        }
+        .legend-box .legend-swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+            border: 1px solid transparent;
+        }
+        .legend-box .legend-line {
+            display: inline-block;
+            width: 14px;
+            border-bottom: 2px dashed #ff8c00;
+            margin-right: 8px;
+        }
+
+        .prod-card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px;
+            margin-bottom: 8px;
+        }
+        .prod-card-header { display: flex; justify-content: space-between; align-items: center; font-size: 11px; font-weight: bold; color: #58a6ff; margin-bottom: 6px; }
+
+        .color-preview-box { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+
+        /* BADGES ESTADO FISICO DEL MATERIAL */
+        .badge-estado {
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+        .badge-liquido { background: #0284c7; color: #ffffff; }
+        .badge-seco { background: #d97706; color: #ffffff; }
+
+        /* TOOLTIP FLOTANTE */
+        #tooltip-flotante {
+            position: fixed;
+            display: none;
+            background: #161b22;
+            color: #e6edf3;
+            border: 1px solid #58a6ff;
+            padding: 10px 14px;
+            border-radius: 8px;
+            font-size: 11px;
+            z-index: 3000;
+            pointer-events: none;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.7);
+            max-width: 300px;
+            line-height: 1.4;
+        }
+        #tooltip-flotante .tt-head { font-size: 12px; font-weight: bold; color: #58a6ff; border-bottom: 1px solid #30363d; padding-bottom: 4px; margin-bottom: 6px; }
+        #tooltip-flotante .tt-item { font-size: 11px; color: #ffffff; margin-bottom: 4px; }
+        #tooltip-flotante .tt-desc { font-size: 10px; color: #8b949e; font-style: italic; }
+
+        /* MODALES */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 2000;
+            opacity: 0; pointer-events: none; transition: opacity 0.2s;
+        }
+        .modal-overlay.active { opacity: 1; pointer-events: auto; }
+
+        .modal-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            width: 95%;
+            max-width: 1050px;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .modal-header { padding: 12px 16px; border-bottom: 1px solid #30363d; display: flex; justify-content: space-between; align-items: center; background: #0d1117; }
+        .modal-body { padding: 16px; overflow-y: auto; flex: 1; }
+        .modal-close { background: none; border: none; color: #8b949e; font-size: 22px; cursor: pointer; }
+        .modal-close:hover { color: #fff; }
+
+        .data-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+        .data-table th, .data-table td { padding: 8px; border-bottom: 1px solid #21262d; text-align: left; }
+        .data-table th { background: #0d1117; color: #8b949e; font-weight: 600; position: sticky; top: 0; }
+
+        .badge-diff-ok { background: #238636; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .badge-diff-alert { background: #da3633; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+
+        .progress-bar-container { background: #21262d; border-radius: 4px; height: 10px; width: 100%; overflow: hidden; margin-top: 3px; }
+        .progress-bar-fill { height: 100%; background: #1f6beb; transition: width 0.4s ease; }
+
+        .hidden { display: none !important; }
+
+        /* FORMULARIO GRID DE ARTICULOS */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .input-group label {
+            font-size: 11px;
+            color: #8b949e;
+            font-weight: 600;
+        }
+        .input-group input, .input-group select {
+            padding: 8px;
+            background: #0d1117;
+            border: 1px solid #30363d;
+            color: #fff;
+            border-radius: 6px;
+            font-size: 12px;
+            outline: none;
+        }
+        .input-group input:focus, .input-group select:focus {
+            border-color: #58a6ff;
+        }
+
+        /* ADAPTACION MOVIL */
+        @media (max-width: 850px) {
+            .main-layout { flex-direction: column; }
+            .hud-panel {
+                position: fixed;
+                bottom: 0; left: 0; right: 0;
+                max-width: 100%;
+                min-width: 100%;
+                max-height: 60vh;
+                z-index: 500;
+                border-radius: 16px 16px 0 0;
+                box-shadow: 0 -5px 25px rgba(0,0,0,0.8);
+                padding-bottom: calc(14px + env(safe-area-inset-bottom, 10px));
+            }
+            .header-container { flex-direction: column; align-items: flex-start; }
+            .search-box { width: 100%; max-width: 100%; }
+            .kpi-bar { width: 100%; justify-content: space-around; }
+            .galpon-container { min-width: auto; width: 100%; }
+            .grid-layout { grid-template-columns: repeat(16, minmax(30px, 1fr)); gap: 2px; }
+            .celda-piso { font-size: 7px; padding: 1px; }
+            .btn { min-height: 40px; padding: 10px 12px; }
+            .input-group input, .input-group select, #txt-filtro-general, .search-box input { min-height: 40px; }
+        }
+
+        @media (max-width: 600px) {
+            .controls-row, .header-container { gap: 8px; }
+            .view-selectors { width: 100%; justify-content: space-between; }
+            .btn-view { flex: 1 1 auto; min-width: 120px; }
+            .search-box { flex-direction: column; }
+            .search-box button { width: 100%; }
+            .hud-panel { max-height: 70vh; }
+        }
+
+        /* MODO MÓVIL ACTIVO */
+        .mobile-view-active .hud-panel {
+            display: none !important;
+        }
+        .mobile-view-active .main-layout {
+            flex-direction: column;
+        }
+        .mobile-view-active .mapa-nave {
+            width: 100%;
+            margin-bottom: 0;
+        }
+        .mobile-view-active .galpon-container {
+            padding: 8px;
+        }
+        .mobile-view-active .header-container,
+        .mobile-view-active .controls-row {
+            padding-bottom: 0;
+        }
+        .mobile-view-active .btn-view {
+            min-width: 88px;
+            font-size: 10px;
+        }
+
+        /* IMPRESION PAPEL / PDF */
+        @media print {
+            body { background: #ffffff !important; color: #000000 !important; padding: 0; }
+            .header-container, .controls-row, .main-layout, .modal-header button, #reallocation-banner { display: none !important; }
+            .modal-overlay { position: static; background: none; opacity: 1; pointer-events: auto; }
+            .modal-card { border: none; box-shadow: none; width: 100%; max-width: 100%; max-height: none; }
+            .modal-body { overflow: visible; padding: 0; }
+            .data-table th { background: #eeeeee !important; color: #000000 !important; border: 1px solid #ccc; }
+            .data-table td { border: 1px solid #ccc; color: #000000 !important; }
+            .print-title { display: block !important; font-size: 18px; font-weight: bold; margin-bottom: 15px; text-align: center; }
+        }
+        .print-title { display: none; }
+
+        .footer-author {
+            width: 100%;
+            text-align: center;
+            font-size: 11px;
+            color: #8b949e;
+            padding: 10px 0 0;
+            margin-top: 10px;
+            border-top: 1px solid rgba(255,255,255,0.08);
+        }
+
+        .footer-author strong {
+            color: #58a6ff;
+            letter-spacing: 0.04em;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TOOLTIP FLOTANTE -->
+    <div id="tooltip-flotante"></div>
+
+    <!-- CABECERA PRINCIPAL Y KPIS -->
+    <div class="header-container">
+        <div>
+            <h1>📦 Vista Cenital de Galpones ILV & WMS v4.0</h1>
+            <div class="subtitle">Gestión de Galpones, Control por Estado (🛢️ Líquido / ⛰️ Seco) y Fórmulas</div>
+        </div>
+
+        <div class="kpi-bar">
+            <div class="kpi-item">
+                <div style="display:flex; align-items:center; gap:4px;">
+                    <span class="kpi-val" id="stat-cap-total">0 m²</span>
+                    <button class="btn btn-secondary" style="padding:1px 4px; font-size:9px;" onclick="editarCapacidadGlobalPlanta()" title="Editar Capacidad Real Total">✏️</button>
+                </div>
+                <span class="kpi-lbl">Capacidad Total</span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-val" id="stat-ocupado-total" style="color: #2ea043;">0 m²</span>
+                <span class="kpi-lbl">Área Ocupada</span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-val" id="stat-disp-total" style="color: #a371f7;">0 m²</span>
+                <span class="kpi-lbl">Área Libre</span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-val" id="stat-pct-total" style="color: #58a6ff;">0%</span>
+                <span class="kpi-lbl">% Ocupación</span>
+            </div>
+            <div class="kpi-item">
+                <span class="kpi-val" id="stat-exactitud-inv" style="color: #f59e0b;">N/A</span>
+                <span class="kpi-lbl">Exactitud Inv. (IRI)</span>
+            </div>
+        </div>
+
+        <!-- BUSCADOR MULTI-CRITERIO -->
+        <div class="search-box">
+            <input type="text" id="txt-buscar" placeholder="Buscar por SKU, Ubicación o Descripción..." onkeyup="if(event.key === 'Enter') buscarPosicion()">
+            <button class="btn btn-primary" onclick="buscarPosicion()">🔍 Buscar</button>
+            <button class="btn btn-secondary" onclick="limpiarBusqueda()" title="Limpiar Resaltado">🧹</button>
+        </div>
+    </div>
+
+    <!-- CONTROLES Y CARGA DE EXCEL / COMPARTIR / INVENTARIO GENERAL -->
+    <div class="controls-row">
+        <div class="view-selectors">
+            <button class="btn-view active" onclick="filtrarVista('todo', this)">Planta Unificada</button>
+            <button class="btn-view" onclick="filtrarVista('g3', this)">Galpón #03</button>
+            <button class="btn-view" onclick="filtrarVista('g4', this)">Galpón #04</button>
+            <button class="btn-view" onclick="filtrarVista('g5', this)">Galpón #05</button>
+        </div>
+
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+            <!-- Inputs Ocultos -->
+            <input type="file" id="input-excel-teorico" accept=".xlsx, .xls, .csv" class="hidden" onchange="procesarExcelTeorico(event)">
+            <input type="file" id="input-importar-json" accept=".json" class="hidden" onchange="cargarDatosCompartidos(event)">
+
+            <button class="btn btn-warning" onclick="abrirModalInventarioGeneral()">📦 Inventario General</button>
+            <button class="btn btn-primary" onclick="abrirModalNuevoArticulo()">➕ Nuevo SKU</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('input-excel-teorico').click()">📊 Cargar Inv. Teórico</button>
+            <button class="btn btn-purple" onclick="abrirModalResumen()">📋 Resumen e Imprimir</button>
+            <button class="btn btn-blue" onclick="abrirModalKPIs()">📈 KPIs Almacén</button>
+            <button class="btn btn-warning" onclick="exportarDatosCompartir()">📤 Exportar</button>
+            <button class="btn btn-secondary" onclick="document.getElementById('input-importar-json').click()">📥 Importar</button>
+            <button class="btn btn-primary" onclick="guardarEnStorage()">💾 Guardar</button>
+            <button class="btn btn-secondary" id="btn-toggle-hud" onclick="toggleHUD()">📋 Consola</button>
+            <button class="btn btn-secondary" id="btn-mobile-mode" onclick="toggleMobileMode()" title="Alternar modo móvil">📱 Modo Móvil</button>
+        </div>
+    </div>
+
+    <!-- BANNER DE MODO REUBICACIÓN -->
+    <div id="reallocation-banner" class="hidden">
+        <span id="reallocation-text">🔄 MODO REUBICACIÓN: Seleccione la ubicación de destino...</span>
+        <button class="btn btn-danger" onclick="cancelarReubicacion()" style="padding: 3px 8px; font-size: 11px;">Cancelar</button>
+    </div>
+
+    <!-- MAPA PRINCIPAL Y CONSOLA -->
+    <div class="main-layout">
+        <div class="mapa-nave">
+            <div id="g3" class="galpon-container">
+                <div class="galpon-title">
+                    <span>GALPÓN #03 </span>
+                    <span id="g3-occupancy-badge" style="font-weight:normal; font-size:11px; color:#8b949e;">0 / 0 m²</span>
+                </div>
+                <div class="grid-layout" id="grid-g3"></div>
+            </div>
+
+            <div id="g4" class="galpon-container">
+                <div class="galpon-title">
+                    <span>GALPÓN #04 </span>
+                    <span id="g4-occupancy-badge" style="font-weight:normal; font-size:11px; color:#8b949e;">0 / 0 m²</span>
+                </div>
+                <div class="grid-layout" id="grid-g4"></div>
+            </div>
+
+            <div id="g5" class="galpon-container">
+                <div class="galpon-title">
+                    <span>GALPÓN #05 </span>
+                    <span id="g5-occupancy-badge" style="font-weight:normal; font-size:11px; color:#8b949e;">0 / 0 m²</span>
+                </div>
+                <div class="grid-layout" id="grid-g5"></div>
+            </div>
+        </div>
+
+        <!-- CONSOLA LATERAL / HUD -->
+        <div class="hud-panel" id="hud-panel">
+            <div>
+                <div class="hud-title">
+                    <span>CONSOLA DE UBICACIÓN</span>
+                    <span id="hud-color-indicator"></span>
+                </div>
+
+                <div id="hud-vacio" style="color: #8b949e; text-align: center; padding: 30px 0; font-size:12px;">
+                    Seleccione un bloque en el mapa para gestionar sus productos y metros cuadrados.
+                </div>
+
+                <div id="hud-datos" class="hidden">
+                    <div class="hud-row"><span class="hud-label">Ubicación Física:</span><span class="hud-value" id="hud-id" style="color:#58a6ff;">-</span></div>
+                    <div class="hud-row"><span class="hud-label">Configuración:</span><span class="hud-value" id="hud-tipo" style="font-size: 10px; text-align: right;">-</span></div>
+
+                    <div style="background: #0d1117; padding: 8px; border-radius: 6px; border: 1px solid #21262d; margin: 10px 0;">
+                        <div class="hud-row">
+                            <span class="hud-label">Capacidad Máx (m²):</span>
+                            <input type="number" id="hud-cap-max-input" min="1" max="10000" style="width: 80px; text-align: right; background: #161b22; border: 1px solid #58a6ff; color: #fff; border-radius: 4px; padding: 2px 4px; font-size: 11px; font-weight: bold;" onchange="actualizarCapacidadMaxPosicion(this.value)">
+                        </div>
+                        <div class="hud-row"><span class="hud-label">Ocupado Actual:</span><span class="hud-value" id="hud-cap-ocup" style="color:#2ea043;">0 m²</span></div>
+                        <div class="hud-row"><span class="hud-label">Disponible:</span><span class="hud-value" id="hud-cap-disp" style="color:#a371f7;">0 m²</span></div>
+                        <div class="hud-row"><span class="hud-label">% Ocupación:</span><span class="hud-value" id="hud-cap-pct" style="color:#58a6ff;">0%</span></div>
+                        <div class="progress-bar-container"><div id="hud-cap-bar" class="progress-bar-fill" style="width:0%;"></div></div>
+                    </div>
+
+                    <div style="display:flex; gap:6px; margin-bottom:10px;">
+                        <button class="btn btn-warning" style="flex:1;" onclick="iniciarReubicacion()">🔄 Reubicar</button>
+                        <button class="btn btn-danger" style="flex:1;" onclick="limpiarPosicionActual()">🧹 Limpiar</button>
+                    </div>
+
+                    <div style="border-top: 1px solid #30363d; padding-top: 10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <span style="font-weight:bold; font-size:11px; color:#c9d1d9;">Productos Asignados:</span>
+                            <button onclick="agregarFormProducto()" class="btn btn-primary" style="padding:3px 6px; font-size:10px;">➕ Agregar</button>
+                        </div>
+
+                        <div id="lista-productos-container"></div>
+
+                        <button onclick="guardarCambiosInventario()" class="btn btn-primary" style="width:100%; padding:9px; margin-top:8px;">
+                            💾 Aplicar Cambios
+                        </button>
+                    </div>
+
+                    <div class="legend-box">
+                        <div class="legend-title">Estructura del Plano:</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#141923; border:1px dashed #30363d;"></span> Pasillos Logísticos (Fondo / Lateral)</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#4a5568; border:1px solid #718096;"></span> Oficinas Administrativas (G5)</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#0984e3; border:1px solid #63b3ed;"></span> Servicios Sanitarios / Baños (G5)</div>
+                        <div class="legend-item"><span class="legend-line"></span> Límite Naranja Pasillo de Fondo</div>
+                        <div class="legend-item"><span class="legend-swatch" style="background:#21262d; border:1px solid #30363d;"></span> Bloque de Almacén Masivo</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DATALIST PARA AUTOCOMPLETADO -->
+    <datalist id="dl-maestro-articulos"></datalist>
+
+    <!-- MODAL 1: NUEVO/EDITAR/ELIMINAR ARTICULO EN MAESTRO -->
+    <div class="modal-overlay" id="modal-nuevo-articulo">
+        <div class="modal-card" style="max-width: 580px;">
+            <div class="modal-header">
+                <h3 style="margin:0; color:#fff;" id="modal-articulo-titulo">➕ Registrar / Editar Artículo en Maestro</h3>
+                <button class="modal-close" onclick="cerrarModales()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label>Código SKU / Artículo (*):</label>
+                        <input type="text" id="nuevo-sku-codigo" placeholder="Ej: LABS-01" oninput="cargarDatosSkuSiExiste(this.value)">
+                    </div>
+                    <div class="input-group">
+                        <label>Estado del Material (*):</label>
+                        <select id="nuevo-sku-estado">
+                            <option value="Seco">⛰️ Seco (Polvo / Sólido)</option>
+                            <option value="Líquido"> 🛢️Líquido (Tambor / Granel)</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Unidad de Medida:</label>
+                        <input type="text" id="nuevo-sku-unidad" placeholder="Ej: Kg, L, TN, Gal">
+                    </div>
+                    <div class="input-group" style="grid-column: span 2;">
+                        <label>Descripción / Nombre del Material (*):</label>
+                        <input type="text" id="nuevo-sku-desc" placeholder="Ej: Ácido Sulfónico Lineal (LABS)">
+                    </div>
+                    <div class="input-group">
+                        <label>Presentación (Factor divisor):</label>
+                        <input type="number" id="nuevo-sku-presentacion" placeholder="Ej: 25 (kg/saco) o 200 (L/tambor)" step="any">
+                    </div>
+                    <div class="input-group">
+                        <label>Tipo de Presentación:</label>
+                        <select id="nuevo-sku-presentacion-tipo">
+                            <option value="Caja">Caja</option>
+                            <option value="Sacos">Sacos</option>
+                            <option value="Sacas">Sacas</option>
+                            <option value="Tambor">Tambor</option>
+                        </select>
+                    </div>
+                    <div class="input-group">
+                        <label>Especificación (Función en Fórmula):</label>
+                        <input type="text" id="nuevo-sku-especificacion" placeholder="Ej: Surfactante, Catalizador, Fragancia">
+                    </div>
+                </div>
+                
+                <div style="display:flex; gap:8px; margin-top:16px;">
+                    <button class="btn btn-primary" style="flex:2; padding:10px;" onclick="guardarNuevoArticuloMaestro()">💾 Guardar / Registrar SKU</button>
+                    <button class="btn btn-warning" id="btn-modificar-sku" style="flex:1; padding:10px;" onclick="modificarArticuloExistente()">✏️ Modificar</button>
+                    <button class="btn btn-danger" id="btn-eliminar-sku" style="flex:1; padding:10px;" onclick="eliminarArticuloDesdeModal()">🗑️ Eliminar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 2: INVENTARIO GENERAL (VER Y MODIFICAR MAESTRO Y STOCK TEÓRICO) -->
+    <div class="modal-overlay" id="modal-inventario-general">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="margin:0; color:#fff;">📦 Gestión e Inventario General de Artículos</h3>
+                <button class="modal-close" onclick="cerrarModales()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap;">
+                    <input type="text" id="txt-filtro-general" placeholder="Filtrar en tabla general..." style="padding:6px 10px; background:#0d1117; border:1px solid #30363d; color:#fff; border-radius:6px; width:260px; font-size:12px;" onkeyup="renderizarTablaInventarioGeneral()">
+                    <button class="btn btn-primary" onclick="cerrarModales(); abrirModalNuevoArticulo();">➕ Agregar Nuevo SKU</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>Código SKU</th>
+                                <th>Descripción</th>
+                                <th>Especificación (Fórmula)</th>
+                                <th>Unidad</th>
+                                <th>Stock Teórico (m²)</th>
+                                <th>Stock Físico (m²)</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-inventario-general-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 3: RESUMEN DE ARTICULOS E IMPRESION -->
+    <div class="modal-overlay" id="modal-resumen">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="margin:0; color:#fff;">📋 Resumen General - Inventario Teórico vs. Físico</h3>
+                <div>
+                    <button class="btn btn-primary" onclick="window.print()">🖨️ Imprimir / PDF</button>
+                    <button class="modal-close" onclick="cerrarModales()">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body">
+                <div class="print-title">REPORTE CONSOLIDADO DE INVENTARIO TEÓRICO VS. FÍSICO Y PRESENTACIONES</div>
+                <div style="overflow-x:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Estado</th>
+                                <th>SKU / Material</th>
+                                <th>Especificación</th>
+                                <th>Ubicación(es) Física(s)</th>
+                                <th>Stock Teórico (m²)</th>
+                                <th>Área Físico (m²)</th>
+                                <th>Estatus</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-resumen-body"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL 4: KPIS AVANZADOS DEL ALMACEN -->
+    <div class="modal-overlay" id="modal-kpis">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 style="margin:0; color:#fff;">📈 KPIs y Métricas del Almacén</h3>
+                <button class="modal-close" onclick="cerrarModales()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <h4 style="color:#58a6ff; margin-top:0;">1. Indicador de Exactitud de Inventario (IRI)</h4>
+                <div style="background:#0d1117; padding:12px; border-radius:6px; border:1px solid #30363d; margin-bottom:15px;">
+                    <div style="font-size:12px; color:#8b949e;">Coincidencia de Mapeo Cenital vs. Inventario Teórico:</div>
+                    <div id="kpi-iri-val" style="font-size:24px; font-weight:bold; color:#f59e0b; margin:5px 0;">0%</div>
+                    <div style="font-size:11px; color:#8b949e;" id="kpi-iri-desc">Cargue el Inventario Teórico (Excel) para habilitar esta métrica.</div>
+                </div>
+
+                <h4 style="color:#a371f7; margin-top:0;">2. Resumen General por Estado Fisico del Material</h4>
+                <div id="dashboard-estado-kpi" style="display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap;"></div>
+
+                <h4 style="color:#58a6ff; margin-top:0;">3. Resumen de Existencias y Cantidad de Presentaciones por SKU</h4>
+                <div id="dashboard-productos-kpi"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const letrasFilas = ['A', 'B', 'C', 'D', 'E', 'F'];
+        let dbInventario = {};
+        
+        let maestroArticulos = {}; 
+        let inventarioTeorico = {}; // { SKU: m2_teorico }
+        
+        let zonaSeleccionadaActual = null;
+        let origenReubicacion = null;
+
+        function getProductColor(code) {
+            if (!code || code === "Vacío" || code.trim() === "") return null;
+            let hash = 0;
+            const str = code.trim().toUpperCase();
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            return `hsl(${Math.abs(hash) % 360}, 70%, 42%)`;
+        }
+
+        function getItemIcon(estado) {
+            return (estado === 'Líquido' || estado === 'Liquido') ? '🛢️' : '⛰️';
+        }
+
+        window.onload = function() {
+            inicializarPlanta();
+        };
+
+        function inicializarPlanta() {
+            const guardado = localStorage.getItem('db_inventario_planta_v4');
+            const maestroGuardado = localStorage.getItem('maestro_articulos_v4');
+            const teoricoGuardado = localStorage.getItem('inventario_teorico_v4');
+
+            if (maestroGuardado) {
+                let parsed = JSON.parse(maestroGuardado);
+                for (let k in parsed) {
+                    if (typeof parsed[k] === 'string') {
+                        maestroArticulos[k] = {
+                            descripcion: parsed[k],
+                            estado: 'Seco',
+                            unidad: 'Kg',
+                            presentacion: 1,
+                            especificacion: 'General'
+                        };
+                    } else {
+                        maestroArticulos[k] = parsed[k];
+                    }
+                }
+                actualizarDataListMaestro();
+            } else {
+                maestroArticulos = {
+                    "LABS-01": { descripcion: "Ácido Sulfónico Lineal", estado: "Líquido", unidad: "Kg", presentacion: 200, especificacion: "Surfactante Activo" },
+                    "SODA-01": { descripcion: "Soda Caústica en Escamas", estado: "Seco", unidad: "Kg", presentacion: 25, especificacion: "Neutralizante" },
+                    "STPP-01": { descripcion: "Tripolifosfato de Sodio", estado: "Seco", unidad: "Kg", presentacion: 25, especificacion: "Ablandador de Agua" },
+                    "FRAG-01": { descripcion: "Fragancia Floral Lavanda", estado: "Líquido", unidad: "Kg", presentacion: 50, especificacion: "Fragancia" }
+                };
+                localStorage.setItem('maestro_articulos_v4', JSON.stringify(maestroArticulos));
+                actualizarDataListMaestro();
+            }
+
+            if (teoricoGuardado) {
+                inventarioTeorico = JSON.parse(teoricoGuardado);
+            }
+
+            generarGalpon('g3');
+            generarGalpon('g4');
+            generarGalpon('g5');
+
+            if (guardado) {
+                const dbCargada = JSON.parse(guardado);
+                for (let k in dbCargada) {
+                    if (dbInventario[k]) {
+                        dbInventario[k].max = dbCargada[k].max || dbInventario[k].max;
+                        dbInventario[k].productos = dbCargada[k].productos || [{ codigo: "Vacío", material: "Vacío", ocupado: 0 }];
+                        actualizarAspectoCelda(k);
+                    }
+                }
+            }
+            actualizarMetricasGlobales();
+        }
+
+        function generarGalpon(idGalpon) {
+            const contenedor = document.getElementById(`grid-${idGalpon}`);
+            contenedor.innerHTML = "";
+            let filasEfectivas = [...letrasFilas];
+            if (idGalpon === 'g3') filasEfectivas.unshift('P');
+            if (idGalpon === 'g5') filasEfectivas.push('P');
+
+            for (let f = 0; f < filasEfectivas.length; f++) {
+                const filaLetra = filasEfectivas[f];
+                for (let t = 1; t <= 16; t++) {
+                    const idZona = `${idGalpon.toUpperCase()}-${t}-${filaLetra}`;
+                    
+                    if (idGalpon === 'g3' && filaLetra === 'P' && (t === 15 || t === 16)) {
+                        contenedor.innerHTML += `<div class="celda-piso celda-infra celda-infra-trafo" title="Transformadores">TRAFO</div>`;
+                        continue;
+                    }
+                    if (idGalpon === 'g5' && filaLetra === 'P') {
+                        if (t >= 1 && t <= 3) { contenedor.innerHTML += `<div class="celda-piso celda-infra celda-infra-oficinas">OFICINA</div>`; continue; }
+                        if (t === 4) { contenedor.innerHTML += `<div class="celda-piso celda-infra celda-infra-banos">BAÑOS</div>`; continue; }
+                    }
+
+                    const esPasilloSuperiorP = (filaLetra === 'P');
+                    const esPasilloFondo = (t === 16);
+                    const esPasillo = esPasilloSuperiorP || esPasilloFondo;
+
+                    let maxCapacidad = esPasillo ? 16 : 128;
+                    let descripcionZona = esPasillo ? `Pasillo Especial (${maxCapacidad} m²)` : `Bloque Masivo Fila ${filaLetra} (${maxCapacidad} m²)`;
+
+                    if (!dbInventario[idZona]) {
+                        dbInventario[idZona] = {
+                            id: idZona,
+                            tipo: descripcionZona,
+                            max: maxCapacidad,
+                            esPasillo: esPasillo,
+                            productos: [{ codigo: "Vacío", material: "Vacío", ocupado: 0 }]
+                        };
+                    }
+
+                    let clasesAdicionales = [];
+                    if (esPasillo) clasesAdicionales.push('pasillo');
+                    if (t === 16) clasesAdicionales.push('linea-sep-left');
+                    if (filaLetra === 'P') clasesAdicionales.push('linea-sep-pasillo-p');
+
+                    let tagTexto = (t === 16 && letrasFilas.includes(filaLetra)) ? `P-${letrasFilas.indexOf(filaLetra)+1}` : (filaLetra === 'P' ? `P-${t}` : `${t}-${filaLetra}`);
+
+                    contenedor.innerHTML += `
+                        <div id="node-${idZona}" class="celda-piso ${clasesAdicionales.join(' ')}" 
+                             onclick="clickCelda('${idZona}')" 
+                             onmouseenter="mostrarTooltip(event, '${idZona}')"
+                             onmousemove="moverTooltip(event)"
+                             onmouseleave="ocultarTooltip()">
+                            <div class="celda-tag">${tagTexto}</div>
+                            <div id="badge-${idZona}" class="celda-badge"></div>
+                            <div class="celda-bar"><div id="fill-${idZona}" class="celda-fill" style="width:0%;"></div></div>
+                        </div>`;
+                }
+            }
+        }
+
+        function clickCelda(idZona) {
+            if (origenReubicacion) {
+                completarReubicacion(idZona);
+            } else {
+                seleccionarCelda(idZona);
+            }
+        }
+
+        function seleccionarCelda(idZona) {
+            zonaSeleccionadaActual = idZona;
+            document.querySelectorAll('.celda-piso').forEach(el => el.classList.remove('seleccionada'));
+            const nodo = document.getElementById(`node-${idZona}`);
+            if (nodo) nodo.classList.add('seleccionada');
+
+            const info = dbInventario[idZona];
+            if (info) {
+                document.getElementById('hud-vacio').classList.add('hidden');
+                document.getElementById('hud-datos').classList.remove('hidden');
+                document.getElementById('hud-id').innerText = info.id;
+                document.getElementById('hud-tipo').innerText = info.tipo;
+                document.getElementById('hud-cap-max-input').value = info.max;
+
+                renderizarListaProductosHUD();
+                actualizarMetricasHUD(info);
+            }
+        }
+
+        function actualizarCapacidadMaxPosicion(nuevaCap) {
+            if (!zonaSeleccionadaActual) return;
+            let capNum = parseFloat(nuevaCap);
+            if (isNaN(capNum) || capNum <= 0) return;
+
+            dbInventario[zonaSeleccionadaActual].max = capNum;
+            actualizarAspectoCelda(zonaSeleccionadaActual);
+            actualizarMetricasHUD(dbInventario[zonaSeleccionadaActual]);
+            actualizarMetricasGlobales();
+            guardarEnStorage();
+        }
+
+        /* EDICION DE CAPACIDAD REAL GLOBAL */
+        function editarCapacidadGlobalPlanta() {
+            let actualTot = 0;
+            for (let k in dbInventario) actualTot += dbInventario[k].max;
+
+            let entrada = prompt(`Ingrese la nueva Capacidad Real Total deseada en m² para la Planta (Capacidad actual: ${actualTot} m²):`, actualTot);
+            if (entrada === null) return;
+
+            let nuevaCapGlobal = parseFloat(entrada);
+            if (isNaN(nuevaCapGlobal) || nuevaCapGlobal <= 0) {
+                alert("⚠️ Debe ingresar un número válido mayor a 0.");
+                return;
+            }
+
+            let factor = nuevaCapGlobal / actualTot;
+            for (let k in dbInventario) {
+                dbInventario[k].max = Math.round(dbInventario[k].max * factor);
+                actualizarAspectoCelda(k);
+            }
+
+            actualizarMetricasGlobales();
+            guardarEnStorage();
+            alert(`✅ Capacidad total de la planta ajustada a ${nuevaCapGlobal} m². Capacidad redistribuida proporcionalmente.`);
+        }
+
+        /* TOOLTIP FLOTANTE SOBRE CELDAS */
+        function mostrarTooltip(e, idZona) {
+            const info = dbInventario[idZona];
+            if (!info) return;
+
+            const tt = document.getElementById('tooltip-flotante');
+            let occupiedSum = info.productos.reduce((s, p) => s + (parseFloat(p.ocupado) || 0), 0);
+            
+            let html = `<div class="tt-head">${info.id} - ${info.tipo}</div>`;
+            html += `<div style="margin-bottom:6px; color:#a371f7;">Ocupación: ${occupiedSum} / ${info.max} m² (${Math.round((occupiedSum/info.max)*100)}%)</div>`;
+
+            let prodsValidos = info.productos.filter(p => p.codigo && p.codigo !== "Vacío" && p.ocupado > 0);
+            if (prodsValidos.length === 0) {
+                html += `<div class="tt-desc">Ubicación libre (Sin productos)</div>`;
+            } else {
+                prodsValidos.forEach(p => {
+                    let sku = p.codigo.toUpperCase();
+                    let mInfo = maestroArticulos[sku] || {};
+                    let desc = mInfo.descripcion || p.material || "Sin descripción";
+                    let estadoIcon = getItemIcon(mInfo.estado || 'Seco');
+                    let esp = mInfo.especificacion ? `[${mInfo.especificacion}]` : '';
+
+                    html += `
+                        <div class="tt-item">
+                            <strong>${estadoIcon} ${sku}</strong>: ${p.ocupado} m²
+                            <div class="tt-desc">${desc} ${esp}</div>
+                        </div>`;
+                });
+            }
+
+            tt.innerHTML = html;
+            tt.style.display = 'block';
+            moverTooltip(e);
+        }
+
+        function moverTooltip(e) {
+            const tt = document.getElementById('tooltip-flotante');
+            if (tt.style.display === 'block') {
+                tt.style.left = (e.clientX + 14) + 'px';
+                tt.style.top = (e.clientY + 14) + 'px';
+            }
+        }
+
+        function ocultarTooltip() {
+            document.getElementById('tooltip-flotante').style.display = 'none';
+        }
+
+        /* LECTURA Y PROCESAMIENTO DE EXCEL (SHEETJS) */
+        function procesarExcelTeorico(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                const json = XLSX.utils.sheet_to_json(firstSheet);
+
+                inventarioTeorico = {};
+                json.forEach(row => {
+                    const sku = (row.CODIGO || row.SKU || row.Codigo || row.Articulo || "").toString().trim().toUpperCase();
+                    const cant = parseFloat(row.CANTIDAD || row.M2 || row.M2_TEORICO || row.STOCK || row.Teorico || row.CANT || 0);
+                    if (sku) {
+                        inventarioTeorico[sku] = (inventarioTeorico[sku] || 0) + cant;
+                    }
+                });
+
+                localStorage.setItem('inventario_teorico_v4', JSON.stringify(inventarioTeorico));
+                actualizarMetricasGlobales();
+                alert(`✅ Inventario Teórico cargado: ${Object.keys(inventarioTeorico).length} SKUs importados.`);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function actualizarDataListMaestro() {
+            const dl = document.getElementById('dl-maestro-articulos');
+            dl.innerHTML = "";
+            for (let sku in maestroArticulos) {
+                let item = maestroArticulos[sku];
+                let icon = getItemIcon(item.estado);
+                dl.innerHTML += `<option value="${sku}">${icon} ${item.descripcion || sku} [${item.especificacion || ''}]</option>`;
+            }
+        }
+
+        /* NUEVO / EDITAR / ELIMINAR ARTICULO MAESTRO */
+        function abrirModalNuevoArticulo(skuEdit = null) {
+            if (skuEdit && maestroArticulos[skuEdit]) {
+                const item = maestroArticulos[skuEdit];
+                document.getElementById('modal-articulo-titulo').innerText = "✏️ Editar / Modificar Artículo en Maestro";
+                document.getElementById('nuevo-sku-codigo').value = skuEdit;
+                document.getElementById('nuevo-sku-codigo').readOnly = false;
+                document.getElementById('nuevo-sku-desc').value = item.descripcion || "";
+                document.getElementById('nuevo-sku-estado').value = item.estado || "Seco";
+                document.getElementById('nuevo-sku-unidad').value = item.unidad || "Kg";
+                document.getElementById('nuevo-sku-presentacion').value = item.presentacion || 1;
+                document.getElementById('nuevo-sku-especificacion').value = item.especificacion || "";
+            } else {
+                document.getElementById('modal-articulo-titulo').innerText = "➕ Registrar Nuevo Artículo en Maestro";
+                document.getElementById('nuevo-sku-codigo').value = "";
+                document.getElementById('nuevo-sku-codigo').readOnly = false;
+                document.getElementById('nuevo-sku-desc').value = "";
+                document.getElementById('nuevo-sku-estado').value = "Seco";
+                document.getElementById('nuevo-sku-unidad').value = "Kg";
+                document.getElementById('nuevo-sku-presentacion').value = 25;
+                document.getElementById('nuevo-sku-especificacion').value = "";
+            }
+            document.getElementById('modal-nuevo-articulo').classList.add('active');
+        }
+
+        function cargarDatosSkuSiExiste(codigo) {
+            let sku = codigo.trim().toUpperCase();
+            if (!sku) {
+                // vaciar campos si está vacío
+                document.getElementById('nuevo-sku-desc').value = "";
+                return;
+            }
+
+            // coincidencia exacta
+            if (maestroArticulos[sku]) {
+                let item = maestroArticulos[sku];
+                document.getElementById('nuevo-sku-desc').value = item.descripcion || "";
+                document.getElementById('nuevo-sku-estado').value = item.estado || "Seco";
+                document.getElementById('nuevo-sku-unidad').value = item.unidad || "Kg";
+                document.getElementById('nuevo-sku-presentacion').value = item.presentacion || 1;
+                document.getElementById('nuevo-sku-presentacion-tipo').value = item.presentacionTipo || 'Caja';
+                document.getElementById('nuevo-sku-especificacion').value = item.especificacion || "";
+                return;
+            }
+
+            // búsqueda parcial: si hay una sola coincidencia que comienza por lo tipeado, autocompletar
+            const claves = Object.keys(maestroArticulos);
+            const matches = claves.filter(k => k.startsWith(sku));
+            if (matches.length === 1) {
+                const item = maestroArticulos[matches[0]];
+                document.getElementById('nuevo-sku-codigo').value = matches[0];
+                document.getElementById('nuevo-sku-desc').value = item.descripcion || "";
+                document.getElementById('nuevo-sku-estado').value = item.estado || "Seco";
+                document.getElementById('nuevo-sku-unidad').value = item.unidad || "Kg";
+                document.getElementById('nuevo-sku-presentacion').value = item.presentacion || 1;
+                document.getElementById('nuevo-sku-presentacion-tipo').value = item.presentacionTipo || 'Caja';
+                document.getElementById('nuevo-sku-especificacion').value = item.especificacion || "";
+            }
+        }
+
+        function guardarNuevoArticuloMaestro() {
+            const sku = document.getElementById('nuevo-sku-codigo').value.trim().toUpperCase();
+            const desc = document.getElementById('nuevo-sku-desc').value.trim();
+            const estado = document.getElementById('nuevo-sku-estado').value;
+            const unidad = document.getElementById('nuevo-sku-unidad').value.trim() || "Kg";
+            const presentacion = parseFloat(document.getElementById('nuevo-sku-presentacion').value) || 1;
+            const presentacionTipo = document.getElementById('nuevo-sku-presentacion-tipo') ? document.getElementById('nuevo-sku-presentacion-tipo').value : 'Caja';
+            const especificacion = document.getElementById('nuevo-sku-especificacion').value.trim() || "General";
+
+            if (!sku) {
+                alert("⚠️ Debe ingresar el Código SKU.");
+                return;
+            }
+
+            // Validación de duplicidad
+            if (maestroArticulos[sku]) {
+                alert(`⚠️ El artículo con SKU "${sku}" YA EXISTE en el Maestro. Si desea cambiar sus datos, utilice el botón de Modificar.`);
+                return;
+            }
+
+            maestroArticulos[sku] = {
+                descripcion: desc || sku,
+                estado: estado,
+                unidad: unidad,
+                presentacion: presentacion,
+                presentacionTipo: presentacionTipo,
+                especificacion: especificacion
+            };
+
+            localStorage.setItem('maestro_articulos_v4', JSON.stringify(maestroArticulos));
+            actualizarDataListMaestro();
+            cerrarModales();
+            
+            if (document.getElementById('modal-inventario-general').classList.contains('active')) {
+                renderizarTablaInventarioGeneral();
+            }
+
+            for (let k in dbInventario) actualizarAspectoCelda(k);
+
+            alert(`✅ Artículo ${sku} registrado correctamente.`);
+        }
+
+        function modificarArticuloExistente() {
+            const sku = document.getElementById('nuevo-sku-codigo').value.trim().toUpperCase();
+            if (!sku || !maestroArticulos[sku]) {
+                alert("⚠️ El SKU ingresado no existe para ser modificado.");
+                return;
+            }
+
+            const desc = document.getElementById('nuevo-sku-desc').value.trim();
+            const estado = document.getElementById('nuevo-sku-estado').value;
+            const unidad = document.getElementById('nuevo-sku-unidad').value.trim() || "Kg";
+            const presentacion = parseFloat(document.getElementById('nuevo-sku-presentacion').value) || 1;
+            const presentacionTipo = document.getElementById('nuevo-sku-presentacion-tipo') ? document.getElementById('nuevo-sku-presentacion-tipo').value : 'Caja';
+            const especificacion = document.getElementById('nuevo-sku-especificacion').value.trim() || "General";
+
+            maestroArticulos[sku] = {
+                descripcion: desc || sku,
+                estado: estado,
+                unidad: unidad,
+                presentacion: presentacion,
+                presentacionTipo: presentacionTipo,
+                especificacion: especificacion
+            };
+
+            localStorage.setItem('maestro_articulos_v4', JSON.stringify(maestroArticulos));
+            actualizarDataListMaestro();
+            cerrarModales();
+            
+            if (document.getElementById('modal-inventario-general').classList.contains('active')) {
+                renderizarTablaInventarioGeneral();
+            }
+
+            for (let k in dbInventario) actualizarAspectoCelda(k);
+
+            alert(`✅ Artículo ${sku} modificado correctamente.`);
+        }
+
+        function eliminarArticuloDesdeModal() {
+            const sku = document.getElementById('nuevo-sku-codigo').value.trim().toUpperCase();
+            if (!sku || !maestroArticulos[sku]) {
+                alert("⚠️ Indique un SKU válido que exista en el maestro para eliminar.");
+                return;
+            }
+
+            if (confirm(`¿Está seguro de eliminar permanentemente el SKU ${sku} del Maestro?`)) {
+                delete maestroArticulos[sku];
+                localStorage.setItem('maestro_articulos_v4', JSON.stringify(maestroArticulos));
+                actualizarDataListMaestro();
+                cerrarModales();
+
+                if (document.getElementById('modal-inventario-general').classList.contains('active')) {
+                    renderizarTablaInventarioGeneral();
+                }
+
+                alert(`🗑️ Artículo ${sku} eliminado del Maestro.`);
+            }
+        }
+
+        /* GESTIÓN DEL INVENTARIO GENERAL */
+        function abrirModalInventarioGeneral() {
+            renderizarTablaInventarioGeneral();
+            document.getElementById('modal-inventario-general').classList.add('active');
+        }
+
+        function renderizarTablaInventarioGeneral() {
+            const tbody = document.getElementById('tabla-inventario-general-body');
+            const filtro = document.getElementById('txt-filtro-general').value.trim().toUpperCase();
+            tbody.innerHTML = "";
+
+            let stockFisicoMap = {};
+            for (let k in dbInventario) {
+                dbInventario[k].productos.forEach(p => {
+                    if (p.codigo && p.codigo !== "Vacío" && p.ocupado > 0) {
+                        let sku = p.codigo.toUpperCase();
+                        stockFisicoMap[sku] = (stockFisicoMap[sku] || 0) + parseFloat(p.ocupado);
+                    }
+                });
+            }
+
+            let todosSKUs = new Set([...Object.keys(maestroArticulos), ...Object.keys(inventarioTeorico), ...Object.keys(stockFisicoMap)]);
+
+            todosSKUs.forEach(sku => {
+                let item = maestroArticulos[sku] || { descripcion: sku, estado: "Seco", unidad: "Kg", presentacion: 1, especificacion: "General" };
+                let teo = inventarioTeorico[sku] !== undefined ? parseFloat(inventarioTeorico[sku]) : 0;
+                let fis = stockFisicoMap[sku] || 0;
+                let presFactor = parseFloat(item.presentacion) || 1;
+                let cantPresentacion = (teo / presFactor).toFixed(2);
+                let icon = getItemIcon(item.estado);
+
+                let textoBusqueda = `${sku} ${item.descripcion} ${item.especificacion} ${item.estado}`.toUpperCase();
+                if (filtro && !textoBusqueda.includes(filtro)) return;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="text-align:center;"><span class="badge-estado ${item.estado === 'Líquido' ? 'badge-liquido' : 'badge-seco'}">${icon} ${item.estado}</span></td>
+                        <td><strong>${sku}</strong></td>
+                        <td>${item.descripcion}</td>
+                        <td><span style="color:#58a6ff;">${item.especificacion}</span></td>
+                        <td>${item.unidad}</td>
+                        <td>
+                            <input type="number" step="any" value="${teo}" style="width:80px; background:#0d1117; border:1px solid #30363d; color:#fff; padding:2px 4px; border-radius:4px;" 
+                                   onchange="actualizarTeoricoDirecto('${sku}', this.value)">
+                        </td>
+                        <td style="color:#2ea043; font-weight:bold;">${fis} m²</td>
+                        <td>
+                            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="cerrarModales(); abrirModalNuevoArticulo('${sku}');">✏️ Editar</button>
+                            <button class="btn btn-danger" style="padding:2px 6px; font-size:10px;" onclick="eliminarArticuloMaestro('${sku}')">🗑️</button>
+                        </td>
+                    </tr>`;
+            });
+        }
+
+        function actualizarTeoricoDirecto(sku, valor) {
+            let valNum = parseFloat(valor) || 0;
+            inventarioTeorico[sku] = valNum;
+            localStorage.setItem('inventario_teorico_v4', JSON.stringify(inventarioTeorico));
+            actualizarMetricasGlobales();
+            renderizarTablaInventarioGeneral();
+        }
+
+        function eliminarArticuloMaestro(sku) {
+            if (confirm(`¿Desea eliminar el artículo ${sku} del maestro?`)) {
+                delete maestroArticulos[sku];
+                localStorage.setItem('maestro_articulos_v4', JSON.stringify(maestroArticulos));
+                actualizarDataListMaestro();
+                renderizarTablaInventarioGeneral();
+            }
+        }
+
+        /* GESTION DE PRODUCTOS EN EL HUD */
+        function renderizarListaProductosHUD() {
+            const container = document.getElementById('lista-productos-container');
+            container.innerHTML = "";
+            const info = dbInventario[zonaSeleccionadaActual];
+            if (!info) return;
+
+            info.productos.forEach((p, idx) => {
+                const sku = p.codigo.toUpperCase();
+                const color = getProductColor(sku);
+                const mInfo = maestroArticulos[sku] || {};
+                const desc = mInfo.descripcion || p.material || "";
+                const icon = getItemIcon(mInfo.estado || 'Seco');
+
+                container.innerHTML += `
+                    <div class="prod-card">
+                        <div class="prod-card-header">
+                            <span>
+                                ${color ? `<span class="color-preview-box" style="background:${color};"></span>` : ''}
+                                ${icon} Producto #${idx + 1}
+                            </span>
+                            ${info.productos.length > 1 ? `<button class="btn btn-danger" style="padding:1px 5px; font-size:9px;" onclick="eliminarProductoHUD(${idx})">✕</button>` : ''}
+                        </div>
+                        <div style="display:flex; gap:4px; margin-bottom:4px;">
+                            <input type="text" placeholder="Código SKU" list="dl-maestro-articulos" value="${p.codigo === 'Vacío' ? '' : p.codigo}" 
+                                   onchange="autoCompletarDescripcionHUD(this, ${idx})" id="input-sku-${idx}" style="width:50%; font-size:11px; padding:4px; background:#161b22; border:1px solid #30363d; color:#fff; border-radius:4px;">
+                            <input type="number" placeholder="m²" value="${p.ocupado || ''}" id="input-m2-${idx}" style="width:50%; font-size:11px; padding:4px; background:#161b22; border:1px solid #30363d; color:#fff; border-radius:4px;">
+                        </div>
+                        <input type="text" placeholder="Descripción / Material" value="${desc}" id="input-desc-${idx}" style="width:100%; font-size:10px; padding:4px; background:#161b22; border:1px solid #30363d; color:#8b949e; border-radius:4px;">
+                    </div>`;
+            });
+        }
+
+        function autoCompletarDescripcionHUD(inputEl, idx) {
+            const val = inputEl.value.trim().toUpperCase();
+            if (maestroArticulos[val]) {
+                document.getElementById(`input-desc-${idx}`).value = maestroArticulos[val].descripcion;
+            }
+        }
+
+        function agregarFormProducto() {
+            if (!zonaSeleccionadaActual) return;
+            const info = dbInventario[zonaSeleccionadaActual];
+            info.productos.push({ codigo: "", material: "", ocupado: 0 });
+            renderizarListaProductosHUD();
+        }
+
+        function eliminarProductoHUD(index) {
+            if (!zonaSeleccionadaActual) return;
+            const info = dbInventario[zonaSeleccionadaActual];
+            info.productos.splice(index, 1);
+            renderizarListaProductosHUD();
+        }
+
+        function guardarCambiosInventario() {
+            if (!zonaSeleccionadaActual) return;
+            const info = dbInventario[zonaSeleccionadaActual];
+            let nuevosProds = [];
+
+            info.productos.forEach((_, idx) => {
+                const sku = document.getElementById(`input-sku-${idx}`).value.trim().toUpperCase();
+                const m2 = parseFloat(document.getElementById(`input-m2-${idx}`).value) || 0;
+                const desc = document.getElementById(`input-desc-${idx}`).value.trim();
+
+                if (sku && m2 > 0) {
+                    nuevosProds.push({ codigo: sku, material: desc, ocupado: m2 });
+                    if (!maestroArticulos[sku]) {
+                        maestroArticulos[sku] = {
+                            descripcion: desc || sku,
+                            estado: "Seco",
+                            unidad: "Kg",
+                            presentacion: 1,
+                            especificacion: "General"
+                        };
+                    }
+                }
+            });
+
+            if (nuevosProds.length === 0) {
+                nuevosProds = [{ codigo: "Vacío", material: "Vacío", ocupado: 0 }];
+            }
+
+            info.productos = nuevosProds;
+            actualizarDataListMaestro();
+            actualizarAspectoCelda(zonaSeleccionadaActual);
+            actualizarMetricasHUD(info);
+            actualizarMetricasGlobales();
+            guardarEnStorage();
+            alert("✅ Cambios aplicados a " + zonaSeleccionadaActual);
+        }
+
+        function limpiarPosicionActual() {
+            if (!zonaSeleccionadaActual) return;
+            if (confirm(`¿Desea vaciar totalmente la posición ${zonaSeleccionadaActual}?`)) {
+                dbInventario[zonaSeleccionadaActual].productos = [{ codigo: "Vacío", material: "Vacío", ocupado: 0 }];
+                actualizarAspectoCelda(zonaSeleccionadaActual);
+                renderizarListaProductosHUD();
+                actualizarMetricasHUD(dbInventario[zonaSeleccionadaActual]);
+                actualizarMetricasGlobales();
+                guardarEnStorage();
+            }
+        }
+
+        /* MODO REUBICACION */
+        function iniciarReubicacion() {
+            if (!zonaSeleccionadaActual) return;
+            origenReubicacion = zonaSeleccionadaActual;
+            document.getElementById('reallocation-banner').classList.remove('hidden');
+            document.getElementById('reallocation-text').innerText = `🔄 REUBICANDO DESDE [${origenReubicacion}]: Seleccione la celda destino...`;
+        }
+
+        function cancelarReubicacion() {
+            origenReubicacion = null;
+            document.getElementById('reallocation-banner').classList.add('hidden');
+        }
+
+        function completarReubicacion(destinoId) {
+            if (origenReubicacion === destinoId) {
+                cancelarReubicacion();
+                return;
+            }
+
+            if (confirm(`¿Confirmar reubicación de productos desde ${origenReubicacion} hacia ${destinoId}?`)) {
+                dbInventario[destinoId].productos = JSON.parse(JSON.stringify(dbInventario[origenReubicacion].productos));
+                dbInventario[origenReubicacion].productos = [{ codigo: "Vacío", material: "Vacío", ocupado: 0 }];
+
+                actualizarAspectoCelda(origenReubicacion);
+                actualizarAspectoCelda(destinoId);
+                cancelarReubicacion();
+                seleccionarCelda(destinoId);
+                actualizarMetricasGlobales();
+                guardarEnStorage();
+            }
+        }
+
+        /* ACTUALIZACION VISUAL CON ICONOS DE ESTADO (🛢️ / ⛰️) */
+        function actualizarAspectoCelda(idZona) {
+            const info = dbInventario[idZona];
+            if (!info) return;
+
+            const badge = document.getElementById(`badge-${idZona}`);
+            const fill = document.getElementById(`fill-${idZona}`);
+            if (!badge || !fill) return;
+
+            let totalOcupado = info.productos.reduce((acc, p) => acc + (parseFloat(p.ocupado) || 0), 0);
+            let pct = Math.min(100, Math.round((totalOcupado / info.max) * 100));
+
+            fill.style.width = `${pct}%`;
+
+            let prodsValidos = info.productos.filter(p => p.codigo && p.codigo !== "Vacío" && p.ocupado > 0);
+
+            // Si hay más de dos artículos, mostramos pequeñas muestras de color por SKU
+            if (prodsValidos.length > 2) {
+                badge.style.background = 'transparent';
+                badge.style.border = '1px solid rgba(255,255,255,0.06)';
+                badge.style.display = 'flex';
+                badge.style.alignItems = 'center';
+                badge.style.gap = '6px';
+                badge.style.justifyContent = 'center';
+
+                // Limitar a mostrar las primeras 6 muestras
+                const maxMuestras = 6;
+                const muestras = prodsValidos.slice(0, maxMuestras).map((p, idx) => {
+                    const base = getProductColor(p.codigo);
+                    const color = base;
+                    return `<span title="${p.codigo.toUpperCase()}" style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${color}; border:1px solid rgba(0,0,0,0.4);"></span>`;
+                }).join('');
+
+                let resto = prodsValidos.length - maxMuestras;
+                badge.innerHTML = `${muestras}${resto > 0 ? `<span style="font-size:10px;color:#c9d1d9; margin-left:6px;">+${resto}</span>` : ''}`;
+                // tooltip general con lista de SKUs
+                badge.title = prodsValidos.map(p => p.codigo.toUpperCase()).join(', ');
+            } else if (prodsValidos.length === 2) {
+                // Dos productos: mostrar dos pequeñas muestras
+                const colores = prodsValidos.map(p => getProductColor(p.codigo));
+                badge.style.background = 'transparent';
+                badge.style.border = 'none';
+                badge.innerHTML = `<span title="${prodsValidos[0].codigo.toUpperCase()}" style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${colores[0]}; border:1px solid rgba(0,0,0,0.4); margin-right:6px;"></span><span title="${prodsValidos[1].codigo.toUpperCase()}" style="display:inline-block; width:10px; height:10px; border-radius:2px; background:${colores[1]}; border:1px solid rgba(0,0,0,0.4);"></span>`;
+                badge.title = prodsValidos.map(p => p.codigo.toUpperCase()).join(', ');
+            } else if (prodsValidos.length === 1) {
+                let sku = prodsValidos[0].codigo.toUpperCase();
+                let color = getProductColor(sku);
+                let itemEstado = maestroArticulos[sku] ? maestroArticulos[sku].estado : 'Seco';
+                let icon = getItemIcon(itemEstado);
+
+                badge.style.background = color;
+                badge.innerHTML = `${icon} ${sku}`;
+                badge.title = sku;
+                badge.style.border = "none";
+            } else {
+                badge.style.background = 'transparent';
+                badge.innerHTML = "";
+                badge.style.border = "none";
+                badge.title = '';
+            }
+        }
+
+        function actualizarMetricasHUD(info) {
+            let totalOcupado = info.productos.reduce((acc, p) => acc + (parseFloat(p.ocupado) || 0), 0);
+            let disp = Math.max(0, info.max - totalOcupado);
+            let pct = Math.round((totalOcupado / info.max) * 100);
+
+            document.getElementById('hud-cap-max-input').value = info.max;
+            document.getElementById('hud-cap-ocup').innerText = `${totalOcupado} m²`;
+            document.getElementById('hud-cap-disp').innerText = `${disp} m²`;
+            document.getElementById('hud-cap-pct').innerText = `${pct}%`;
+            document.getElementById('hud-cap-bar').style.width = `${pct}%`;
+
+            let primerProducto = info.productos.find(p => p.codigo !== "Vacío");
+            let ind = document.getElementById('hud-color-indicator');
+            if (primerProducto) {
+                ind.style.display = 'inline-block';
+                ind.style.width = '12px';
+                ind.style.height = '12px';
+                ind.style.borderRadius = '3px';
+                ind.style.backgroundColor = getProductColor(primerProducto.codigo);
+            } else {
+                ind.style.display = 'none';
+            }
+        }
+
+        function actualizarMetricasGlobales() {
+            let capTot = 0, ocupTot = 0;
+            let capG3 = 0, ocupG3 = 0;
+            let capG4 = 0, ocupG4 = 0;
+            let capG5 = 0, ocupG5 = 0;
+
+            for (let k in dbInventario) {
+                let item = dbInventario[k];
+                let itemOcup = item.productos.reduce((a, p) => a + (parseFloat(p.ocupado) || 0), 0);
+                
+                capTot += item.max;
+                ocupTot += itemOcup;
+
+                if (k.startsWith('G3')) { capG3 += item.max; ocupG3 += itemOcup; }
+                if (k.startsWith('G4')) { capG4 += item.max; ocupG4 += itemOcup; }
+                if (k.startsWith('G5')) { capG5 += item.max; ocupG5 += itemOcup; }
+            }
+
+            let dispTot = Math.max(0, capTot - ocupTot);
+            let pctTot = capTot > 0 ? Math.round((ocupTot / capTot) * 100) : 0;
+
+            document.getElementById('stat-cap-total').innerText = `${capTot} m²`;
+            document.getElementById('stat-ocupado-total').innerText = `${ocupTot} m²`;
+            document.getElementById('stat-disp-total').innerText = `${dispTot} m²`;
+            document.getElementById('stat-pct-total').innerText = `${pctTot}%`;
+
+            document.getElementById('g3-occupancy-badge').innerText = `${ocupG3} / ${capG3} m² (${Math.round((ocupG3/capG3)*100 || 0)}%)`;
+            document.getElementById('g4-occupancy-badge').innerText = `${ocupG4} / ${capG4} m² (${Math.round((ocupG4/capG4)*100 || 0)}%)`;
+            document.getElementById('g5-occupancy-badge').innerText = `${ocupG5} / ${capG5} m² (${Math.round((ocupG5/capG5)*100 || 0)}%)`;
+
+            calcularIRI();
+        }
+
+        function calcularIRI() {
+            let skusTeoricos = Object.keys(inventarioTeorico);
+            if (skusTeoricos.length === 0) {
+                document.getElementById('stat-exactitud-inv').innerText = "N/A";
+                return;
+            }
+
+            let mapaFisicoSKU = {};
+            for (let k in dbInventario) {
+                dbInventario[k].productos.forEach(p => {
+                    if (p.codigo && p.codigo !== "Vacío" && p.ocupado > 0) {
+                        let c = p.codigo.toUpperCase();
+                        mapaFisicoSKU[c] = (mapaFisicoSKU[c] || 0) + parseFloat(p.ocupado);
+                    }
+                });
+            }
+
+            let coincidencias = 0;
+            let totalEvaluados = new Set([...skusTeoricos, ...Object.keys(mapaFisicoSKU)]).size;
+
+            skusTeoricos.forEach(sku => {
+                let teo = inventarioTeorico[sku] || 0;
+                let fis = mapaFisicoSKU[sku] || 0;
+                if (Math.abs(teo - fis) < 0.1) coincidencias++;
+            });
+
+            let iri = Math.round((coincidencias / totalEvaluados) * 100);
+            document.getElementById('stat-exactitud-inv').innerText = `${iri}%`;
+            document.getElementById('kpi-iri-val').innerText = `${iri}%`;
+            document.getElementById('kpi-iri-desc').innerText = `${coincidencias} de ${totalEvaluados} SKUs coinciden exactamente entre el mapeo cenital físico y el Excel teórico.`;
+        }
+
+        /* REPORTE CONSOLIDADO CON CALCULOS DE PRESENTACION Y ESTADO */
+        function abrirModalResumen() {
+            const tbody = document.getElementById('tabla-resumen-body');
+            tbody.innerHTML = "";
+
+            let consolidadoFisico = {};
+
+            for (let k in dbInventario) {
+                dbInventario[k].productos.forEach(p => {
+                    if (p.codigo && p.codigo !== "Vacío" && p.ocupado > 0) {
+                        let sku = p.codigo.trim().toUpperCase();
+                        if (!consolidadoFisico[sku]) {
+                            consolidadoFisico[sku] = { ubicaciones: [], m2Fisico: 0 };
+                        }
+                        consolidadoFisico[sku].ubicaciones.push(`${k} (${p.ocupado}m²)`);
+                        consolidadoFisico[sku].m2Fisico += parseFloat(p.ocupado);
+                    }
+                });
+            }
+
+            let todosLosSKUs = new Set([...Object.keys(consolidadoFisico), ...Object.keys(inventarioTeorico)]);
+
+            todosLosSKUs.forEach(sku => {
+                let skuKey = sku.trim().toUpperCase();
+                let mInfo = maestroArticulos[skuKey] || { descripcion: skuKey, estado: "Seco", unidad: "Kg", presentacion: 1, especificacion: "General" };
+                let fis = consolidadoFisico[skuKey] ? consolidadoFisico[skuKey].m2Fisico : 0;
+                let ubi = consolidadoFisico[skuKey] ? consolidadoFisico[skuKey].ubicaciones.join(", ") : "Sin Ubicar en Mapa";
+                let teo = inventarioTeorico[skuKey] !== undefined ? parseFloat(inventarioTeorico[skuKey]) : 0;
+                let diff = fis - teo;
+
+                let presFactor = parseFloat(mInfo.presentacion) || 1;
+                let cantPresentacion = (teo / presFactor).toFixed(2);
+                let icon = getItemIcon(mInfo.estado);
+
+                let badgeEstatus = (Math.abs(diff) < 0.01)
+                    ? `<span class="badge-diff-ok">OK</span>` 
+                    : `<span class="badge-diff-alert">Descuadre (${diff > 0 ? '+' : ''}${diff.toFixed(1)} m²)</span>`;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="text-align:center;"><span class="badge-estado ${mInfo.estado === 'Líquido' ? 'badge-liquido' : 'badge-seco'}">${icon} ${mInfo.estado}</span></td>
+                        <td><strong>${skuKey}</strong><br><span style="font-size:10px; color:#8b949e;">${mInfo.descripcion}</span></td>
+                        <td><span style="color:#58a6ff;">${mInfo.especificacion}</span></td>
+                        <td style="font-size:10px; color:#58a6ff;">${ubi}</td>
+                        <td><strong>${teo}</strong></td>
+                        <td><strong>${fis} m²</strong></td>
+                        <td>${badgeEstatus}</td>
+                    </tr>`;
+            });
+
+            document.getElementById('modal-resumen').classList.add('active');
+        }
+
+        function abrirModalKPIs() {
+            const container = document.getElementById('dashboard-productos-kpi');
+            const estadoContainer = document.getElementById('dashboard-estado-kpi');
+            container.innerHTML = "";
+            estadoContainer.innerHTML = "";
+
+            let resumenSKU = {};
+            let m2Liquido = 0;
+            let m2Seco = 0;
+
+            for (let k in dbInventario) {
+                dbInventario[k].productos.forEach(p => {
+                    if (p.codigo && p.codigo !== "Vacío" && p.ocupado > 0) {
+                        let sku = p.codigo.toUpperCase();
+                        let m2 = parseFloat(p.ocupado);
+                        resumenSKU[sku] = (resumenSKU[sku] || 0) + m2;
+
+                        let mInfo = maestroArticulos[sku] || {};
+                        if (mInfo.estado === 'Líquido') {
+                            m2Liquido += m2;
+                        } else {
+                            m2Seco += m2;
+                        }
+                    }
+                });
+            }
+
+            estadoContainer.innerHTML = `
+                <div style="flex:1; min-width:200px; background:#0d1117; padding:12px; border-radius:6px; border:1px solid #0284c7;">
+                    <div style="font-size:11px; color:#8b949e;">🛢️ Total Estado Líquido</div>
+                    <div style="font-size:20px; font-weight:bold; color:#0284c7; margin-top:4px;">${m2Liquido} m²</div>
+                </div>
+                <div style="flex:1; min-width:200px; background:#0d1117; padding:12px; border-radius:6px; border:1px solid #d97706;">
+                    <div style="font-size:11px; color:#8b949e;">⛰️ Total Estado Seco</div>
+                    <div style="font-size:20px; font-weight:bold; color:#d97706; margin-top:4px;">${m2Seco} m²</div>
+                </div>`;
+
+            for (let sku in resumenSKU) {
+                let m2 = resumenSKU[sku];
+                let color = getProductColor(sku);
+                let mInfo = maestroArticulos[sku] || {};
+                let icon = getItemIcon(mInfo.estado || 'Seco');
+                let factor = parseFloat(mInfo.presentacion) || 1;
+                let cantPacks = (m2 / factor).toFixed(2);
+
+                container.innerHTML += `
+                    <div style="background:#0d1117; padding:10px; border-radius:6px; border:1px solid #30363d; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                        <div>
+                            <span class="color-preview-box" style="background:${color};"></span>
+                            <strong style="color:#ffffff;">${icon} ${sku}</strong> - <span style="color:#8b949e; font-size:11px;">${mInfo.descripcion || ''} [${mInfo.especificacion || ''}]</span>
+                        </div>
+                        <div style="display:flex; gap:12px; align-items:center;">
+                            <span style="font-weight:bold; color:#a371f7; font-size:11px;">📦 ${cantPacks} Presentaciones (${factor} ${mInfo.unidad || 'Kg'}/u)</span>
+                            <span style="font-weight:bold; color:#58a6ff;">${m2} m² ocupados</span>
+                        </div>
+                    </div>`;
+            }
+
+            document.getElementById('modal-kpis').classList.add('active');
+        }
+
+        function cerrarModales() {
+            document.querySelectorAll('.modal-overlay').forEach(m => m.classList.remove('active'));
+        }
+
+        /* BUSQUEDA MULTI-CRITERIO Y RESALTADO */
+        function buscarPosicion() {
+            const query = document.getElementById('txt-buscar').value.trim().toUpperCase();
+            
+            document.querySelectorAll('.celda-piso').forEach(el => {
+                el.classList.remove('resaltado-busqueda');
+            });
+
+            if (!query) return;
+
+            let encontrados = 0;
+            let primeraPosicion = null;
+
+            for (let k in dbInventario) {
+                let cell = dbInventario[k];
+                let coincideUbicacion = k.toUpperCase().includes(query);
+                
+                let coincideSKUoDesc = cell.productos.some(p => {
+                    if (!p.codigo || p.codigo === "Vacío") return false;
+                    let sku = p.codigo.toUpperCase();
+                    let mInfo = maestroArticulos[sku] || {};
+                    let desc = (mInfo.descripcion || p.material || "").toUpperCase();
+                    let esp = (mInfo.especificacion || "").toUpperCase();
+                    let estado = (mInfo.estado || "").toUpperCase();
+                    return sku.includes(query) || desc.includes(query) || esp.includes(query) || estado.includes(query);
+                });
+
+                if (coincideUbicacion || coincideSKUoDesc) {
+                    encontrados++;
+                    if (!primeraPosicion) primeraPosicion = k;
+                    const el = document.getElementById(`node-${k}`);
+                    if (el) el.classList.add('resaltado-busqueda');
+                }
+            }
+
+            if (encontrados > 0) {
+                if (primeraPosicion) seleccionarCelda(primeraPosicion);
+                alert(`🔍 Se encontraron ${encontrados} ubicación(es) resaltada(s) que coinciden con: "${query}"`);
+            } else {
+                alert("🔍 No se encontraron coincidencias para: " + query);
+            }
+        }
+
+        function limpiarBusqueda() {
+            document.getElementById('txt-buscar').value = "";
+            document.querySelectorAll('.celda-piso').forEach(el => {
+                el.classList.remove('resaltado-busqueda');
+            });
+        }
+
+        function filtrarVista(vista, btn) {
+            document.querySelectorAll('.btn-view').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.getElementById('g3').style.display = (vista === 'todo' || vista === 'g3') ? 'block' : 'none';
+            document.getElementById('g4').style.display = (vista === 'todo' || vista === 'g4') ? 'block' : 'none';
+            document.getElementById('g5').style.display = (vista === 'todo' || vista === 'g5') ? 'block' : 'none';
+        }
+
+        function toggleHUD() {
+            document.getElementById('hud-panel').classList.toggle('collapsed');
+        }
+
+        function toggleMobileMode() {
+            const body = document.body;
+            const btn = document.getElementById('btn-mobile-mode');
+            body.classList.toggle('mobile-view-active');
+
+            if (body.classList.contains('mobile-view-active')) {
+                btn.innerText = '🧭 Modo Móvil Activo';
+                btn.title = 'Salir del modo móvil';
+            } else {
+                btn.innerText = '📱 Modo Móvil';
+                btn.title = 'Alternar modo móvil';
+            }
+        }
+
+        /* GUARDADO, EXPORTACION Y COMPARTIR */
+        function guardarEnStorage() {
+            localStorage.setItem('db_inventario_planta_v4', JSON.stringify(dbInventario));
+            localStorage.setItem('maestro_articulos_v4', JSON.stringify(maestroArticulos));
+            localStorage.setItem('inventario_teorico_v4', JSON.stringify(inventarioTeorico));
+            alert("💾 Estado de planta, maestro e inventario guardados localmente.");
+        }
+
+        function exportarDatosCompartir() {
+            const payload = {
+                version: "4.0",
+                fechaExportacion: new Date().toISOString(),
+                dbInventario: dbInventario,
+                maestroArticulos: maestroArticulos,
+                inventarioTeorico: inventarioTeorico
+            };
+
+            const jsonText = JSON.stringify(payload, null, 2);
+            const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.href = url;
+            downloadAnchor.download = `BACKUP_WMS_PLANTA_V4_${new Date().toISOString().slice(0,10)}.json`;
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            setTimeout(() => {
+                URL.revokeObjectURL(url);
+                downloadAnchor.remove();
+            }, 500);
+
+            // Fallback for Safari iOS if download attribute is not supported
+            if (typeof downloadAnchor.download === 'undefined') {
+                window.open(url, '_blank');
+            }
+        }
+
+        function cargarDatosCompartidos(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.dbInventario) {
+                        dbInventario = data.dbInventario;
+                        maestroArticulos = data.maestroArticulos || {};
+                        inventarioTeorico = data.inventarioTeorico || {};
+
+                        guardarEnStorage();
+                        inicializarPlanta();
+                        alert("✅ Datos importados y actualizados exitosamente.");
+                    } else {
+                        alert("❌ Formato de archivo JSON no válido.");
+                    }
+                } catch (err) {
+                    alert("❌ Error al leer el archivo de datos: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+        }
+    </script>
+
+    <footer class="firma-autor">
+        <p>Elaborado por <strong>FRANCISCO CAMPOS</strong> &copy; 2026</p>
+    </footer>
+</html>
